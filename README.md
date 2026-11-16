@@ -194,3 +194,7 @@ TrafficBar/
   build/           构建输出
   dist/            发布副本
 ```
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
