@@ -163,6 +163,17 @@ void DrawSettingsButton(const DRAWITEMSTRUCT* item) {
     SelectObject(item->hDC, oldFont);
 }
 
+void UpdateItemsHint() {
+    if (g_statusLabel == nullptr) {
+        return;
+    }
+    const std::vector<CustomItem> items = ParseCustomItems(GetControlText(g_itemsEdit));
+    wchar_t hint[160]{};
+    swprintf_s(hint, L"已识别 %zu 项；每行一个“名称=标识”，可滚动查看全部。",
+               items.size());
+    SetWindowTextW(g_statusLabel, hint);
+}
+
 void LayoutSettings(HWND hwnd) {
     RECT client{};
     GetClientRect(hwnd, &client);
@@ -276,9 +287,10 @@ void CreateSettingsControls(HWND hwnd) {
     wchar_t refresh[32]{};
     swprintf_s(refresh, L"%d", g_app.config.customRefreshMs);
     SetWindowTextW(g_refreshEdit, refresh);
-    SetWindowTextW(g_statusLabel, L"名称用于任务栏显示，标识支持数字代码或带市场前缀。");
-
     LayoutSettings(hwnd);
+    SendMessageW(g_itemsEdit, EM_SETSEL, 0, 0);
+    SendMessageW(g_itemsEdit, EM_SCROLLCARET, 0, 0);
+    UpdateItemsHint();
     ApplySettingsTheme(hwnd);
 }
 
@@ -374,6 +386,14 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         case IDC_CANCEL:
             DestroyWindow(hwnd);
             return 0;
+        case IDC_ITEMS:
+            if (HIWORD(wParam) == EN_CHANGE) {
+                // The dark multiline edit can otherwise leave stale paint
+                // bands after deleting a selection or adding a line break.
+                InvalidateRect(g_itemsEdit, nullptr, TRUE);
+                UpdateItemsHint();
+            }
+            return 0;
         default:
             break;
         }
@@ -461,6 +481,8 @@ void ShowCustomSettings(HWND owner) {
     UpdateWindow(g_settingsWindow);
     SetForegroundWindow(g_settingsWindow);
     SetFocus(g_itemsEdit);
+    SendMessageW(g_itemsEdit, EM_SETSEL, 0, 0);
+    SendMessageW(g_itemsEdit, EM_SCROLLCARET, 0, 0);
 }
 
 void DestroyCustomSettings() {
