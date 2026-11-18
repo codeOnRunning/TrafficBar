@@ -538,10 +538,11 @@ void EnsureAboveTaskbar() {
     const bool topmost =
         (GetWindowLongPtrW(g_app.taskbarHwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
     if (root == taskbar || desktop || !topmost) {
+        // Do not force a repaint here. A topmost z-order correction during a
+        // taskbar click can otherwise make the compact widget visibly blink.
         SetWindowPos(g_app.taskbarHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-        RedrawWindow(g_app.taskbarHwnd, nullptr, nullptr,
-                     RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
+                         SWP_NOREDRAW);
     }
 }
 
