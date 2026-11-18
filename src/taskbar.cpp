@@ -694,12 +694,18 @@ bool IsTaskbarUsable() {
             _wcsicmp(foregroundClass, L"Progman") == 0 ||
             _wcsicmp(foregroundClass, L"WorkerW") == 0;
 
+        // A fullscreen app on another monitor must not hide the widget on the
+        // primary taskbar. Only a foreground window on the taskbar monitor can
+        // actually cover this taskbar.
+        const HMONITOR taskbarMonitor = MonitorFromWindow(taskbar, MONITOR_DEFAULTTONEAREST);
+        const HMONITOR foregroundMonitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST);
+
         RECT foregroundRect{};
-        if (!desktopForeground && GetWindowRect(foreground, &foregroundRect)) {
-            HMONITOR monitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST);
+        if (!desktopForeground && foregroundMonitor == taskbarMonitor &&
+            GetWindowRect(foreground, &foregroundRect)) {
             MONITORINFO monitorInfo{};
             monitorInfo.cbSize = sizeof(monitorInfo);
-            if (monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo)) {
+            if (GetMonitorInfoW(foregroundMonitor, &monitorInfo)) {
                 const RECT& screen = monitorInfo.rcMonitor;
                 if (foregroundRect.left <= screen.left + 1 && foregroundRect.top <= screen.top + 1 &&
                     foregroundRect.right >= screen.right - 1 &&

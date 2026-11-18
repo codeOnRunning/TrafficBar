@@ -454,7 +454,7 @@ bool CreateScheduledTask() {
         L"<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
         L"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
         L"  <RegistrationInfo><Description>TrafficBar autostart</Description></RegistrationInfo>\r\n"
-        L"  <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>\r\n"
+        L"  <Triggers><LogonTrigger><Enabled>true</Enabled><Delay>PT10S</Delay></LogonTrigger></Triggers>\r\n"
         L"  <Principals><Principal id=\"Author\"><UserId>" +
         XmlEscape(userId) +
         L"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel>"
@@ -466,7 +466,8 @@ bool CreateScheduledTask() {
         L"<IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>"
         L"<AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden>"
         L"<RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun>"
-        L"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority></Settings>\r\n"
+        L"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority>"
+        L"<RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>\r\n"
         L"  <Actions Context=\"Author\"><Exec><Command>" +
         XmlEscape(GetExePath()) +
         L"</Command><Arguments>--autostart</Arguments></Exec></Actions>\r\n"
