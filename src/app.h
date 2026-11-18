@@ -15,7 +15,7 @@ struct AppConfig {
     uint64_t adapterLuid = 0;   // 0 = auto
     int intervalMs = 1000;
     int fontSize = 9;
-    int themeMode = 0;  // 0 = follow taskbar, 1 = dark, 2 = light, 3 = navy, 4 = forest
+    int themeMode = 0;  // 0 auto, 1 dark, 2 light, 3 navy, 4 forest, 5-10 color presets
 
     bool customEnabled = false;
     std::wstring customPrimary;

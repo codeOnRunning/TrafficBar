@@ -4,6 +4,8 @@
 
 完整使用说明：[docs/使用说明.md](docs/使用说明.md)
 
+![任务栏效果](docs/taskbar.png)
+
 显示：
 
 - 实时上传 / 下载速度
@@ -15,6 +17,8 @@
 - 插件自定义指标（`plugins` 目录）
 
 界面为两行紧凑布局，贴在任务栏通知区域左侧，跟随任务栏高度、DPI 和深浅色主题。任务栏在左侧/右侧时自动切换为窄条纵向布局；宽度小于 110px 时各项目和百分比拆成两行显示。多显示器副任务栏会自动发现并显示，同样支持悬停浮帖和右键菜单。
+
+![竖排任务栏](docs/vertical.png)
 
 ## 构建
 
@@ -37,7 +41,7 @@ build.bat
 首次运行后，右键任务栏文字或托盘图标可以打开菜单：
 
 - 显示 CPU / 显示内存 / 显示 GPU（悬停）
-- 外观主题：跟随任务栏 / 深色 / 浅色 / 深蓝 / 墨绿
+- 外观主题：跟随任务栏 / 深色 / 浅色 / 深蓝 / 墨绿 / 黄色 / 粉色 / 紫色 / 橙色 / 青色 / 酒红
 - 网卡：自动选择或手动指定
 - 刷新间隔：0.5 / 1 / 2 / 5 秒
 - 开机自启（任务计划，最高权限运行）
@@ -94,6 +98,8 @@ TrafficBarHistory 1
 
 ## 历史流量窗口
 
+![历史流量窗口](docs/history.png)
+
 - 支持按日 / 按月 / 按年查看，列表按选择的时间粒度倒序汇总
 - 顶部汇总：今日、本月、今年、总计的上传 / 下载 / 合计
 - 深色/浅色主题自动适配
@@ -101,6 +107,8 @@ TrafficBarHistory 1
 - 数据仅保存在本机，不联网
 
 ## 进程流量（按进程）
+
+![进程流量](docs/process.png)
 
 - 右键菜单选择“进程流量...”
 - 使用 Windows ETW 的 `Microsoft-Windows-Kernel-Network` 统计 TCP / UDP 发送和接收字节；
@@ -127,6 +135,8 @@ TrafficBarPluginGetMetrics(TrafficBarPluginMetric* metrics, int capacity);
 
 任务栏第二行可以显示一个主指标，鼠标悬停显示全部项目。默认关闭，使用 `Ctrl+Alt+S` 打开设置；设置窗不会出现在右键菜单和托盘提示里。
 
+![自定义指标设置](docs/custom-settings.png)
+
 每行填写一个 `名称=标识`：
 
 - 标识支持 `sh` / `sz` / `bj` / `hk` / `us` 前缀；
@@ -137,8 +147,8 @@ TrafficBarPluginGetMetrics(TrafficBarPluginMetric* metrics, int capacity);
 ```ini
 [custom]
 enabled=1
-primary=AAPL
-items=AAPL=usAAPL;MSFT=usMSFT;TX=hk00700
+primary=rmw
+items=rmw=sh603000;ZSYH=sz000001;TX=hk00700;AAPL=usAAPL
 refresh_ms=5000
 show_percent=0
 ```
@@ -148,6 +158,8 @@ show_percent=0
 ## 鼠标悬停浮帖
 
 鼠标移到任务栏文字上约 300 ms，会显示一个小浮帖：
+
+![悬停浮帖](docs/hover.png)
 
 - 当前上传 / 下载速度
 - CPU 使用率

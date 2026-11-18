@@ -34,6 +34,12 @@ enum MenuCommand : UINT {
     IDM_THEME_LIGHT = 7003,
     IDM_THEME_NAVY = 7004,
     IDM_THEME_FOREST = 7005,
+    IDM_THEME_YELLOW = 7006,
+    IDM_THEME_PINK = 7007,
+    IDM_THEME_PURPLE = 7008,
+    IDM_THEME_ORANGE = 7009,
+    IDM_THEME_TEAL = 7010,
+    IDM_THEME_WINE = 7011,
     IDM_ADAPTER_AUTO = 2001,
     IDM_ADAPTER_BASE = 2100,
     IDM_INTERVAL_500 = 3001,
@@ -74,7 +80,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.15.3\n\n";
+    std::wstring message = L"TrafficBar 0.16.0\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;
@@ -109,6 +115,24 @@ void HandleMenuCommand(HWND owner, UINT command, const std::vector<AdapterInfo>&
         themeChanged = true;
     } else if (command == IDM_THEME_FOREST) {
         g_app.config.themeMode = 4;
+        themeChanged = true;
+    } else if (command == IDM_THEME_YELLOW) {
+        g_app.config.themeMode = 5;
+        themeChanged = true;
+    } else if (command == IDM_THEME_PINK) {
+        g_app.config.themeMode = 6;
+        themeChanged = true;
+    } else if (command == IDM_THEME_PURPLE) {
+        g_app.config.themeMode = 7;
+        themeChanged = true;
+    } else if (command == IDM_THEME_ORANGE) {
+        g_app.config.themeMode = 8;
+        themeChanged = true;
+    } else if (command == IDM_THEME_TEAL) {
+        g_app.config.themeMode = 9;
+        themeChanged = true;
+    } else if (command == IDM_THEME_WINE) {
+        g_app.config.themeMode = 10;
         themeChanged = true;
     } else if (command == IDM_ADAPTER_AUTO) {
         g_app.config.adapterLuid = 0;
@@ -267,6 +291,25 @@ void ShowAppMenu(HWND owner, POINT pt) {
         AppendMenuW(themeMenu,
                     MF_STRING | (g_app.config.themeMode == 4 ? MF_CHECKED : MF_UNCHECKED),
                     IDM_THEME_FOREST, L"墨绿");
+        AppendMenuW(themeMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 5 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_YELLOW, L"黄色");
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 6 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_PINK, L"粉色");
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 7 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_PURPLE, L"紫色");
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 8 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_ORANGE, L"橙色");
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 9 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_TEAL, L"青色");
+        AppendMenuW(themeMenu,
+                    MF_STRING | (g_app.config.themeMode == 10 ? MF_CHECKED : MF_UNCHECKED),
+                    IDM_THEME_WINE, L"酒红");
         AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(themeMenu), L"外观主题");
     }
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);

@@ -813,6 +813,18 @@ void UpdateThemeColors(bool force) {
         background = RGB(22, 30, 58);
     } else if (g_app.config.themeMode == 4) {
         background = RGB(24, 38, 34);
+    } else if (g_app.config.themeMode == 5) {
+        background = RGB(255, 205, 64);
+    } else if (g_app.config.themeMode == 6) {
+        background = RGB(247, 184, 204);
+    } else if (g_app.config.themeMode == 7) {
+        background = RGB(118, 83, 173);
+    } else if (g_app.config.themeMode == 8) {
+        background = RGB(255, 140, 0);
+    } else if (g_app.config.themeMode == 9) {
+        background = RGB(0, 121, 107);
+    } else if (g_app.config.themeMode == 10) {
+        background = RGB(136, 14, 45);
     } else if (g_app.config.themeMode == 0) {
         background = SampleTaskbarColor();
     }
