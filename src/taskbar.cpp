@@ -509,41 +509,17 @@ void EnsureAboveTaskbar() {
         return;
     }
 
-    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-    if (taskbar == nullptr) {
+    // Do not keep reasserting HWND_TOPMOST in response to taskbar clicks.
+    // Reordering a topmost popup against the taskbar on every click makes the
+    // compact widget visibly blink. The window is already created topmost;
+    // only repair it if that extended style was actually lost.
+    if ((GetWindowLongPtrW(g_app.taskbarHwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0) {
         return;
     }
 
-    RECT client{};
-    if (!GetClientRect(g_app.taskbarHwnd, &client)) {
-        return;
-    }
-    POINT center{(client.left + client.right) / 2, (client.top + client.bottom) / 2};
-    ClientToScreen(g_app.taskbarHwnd, &center);
-
-    HWND covering = WindowFromPoint(center);
-    if (covering == nullptr || covering == g_app.taskbarHwnd) {
-        return;
-    }
-
-    // Only fight the taskbar/desktop or a lost topmost state. Start menu,
-    // overflow flyout and popup menus are allowed to cover the widget.
-    HWND root = GetAncestor(covering, GA_ROOT);
-    wchar_t className[128]{};
-    if (root != nullptr) {
-        GetClassNameW(root, className, ARRAYSIZE(className));
-    }
-    const bool desktop = _wcsicmp(className, L"Progman") == 0 ||
-                         _wcsicmp(className, L"WorkerW") == 0;
-    const bool topmost =
-        (GetWindowLongPtrW(g_app.taskbarHwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
-    if (root == taskbar || desktop || !topmost) {
-        // Do not force a repaint here. A topmost z-order correction during a
-        // taskbar click can otherwise make the compact widget visibly blink.
-        SetWindowPos(g_app.taskbarHwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
-                         SWP_NOREDRAW);
-    }
+    SetWindowPos(g_app.taskbarHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
+                     SWP_NOREDRAW);
 }
 
 int MeasureText(HDC dc, const std::wstring& text) {
