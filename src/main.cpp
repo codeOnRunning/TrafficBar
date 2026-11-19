@@ -80,7 +80,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.16.3\n\n";
+    std::wstring message = L"TrafficBar 0.16.4\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;

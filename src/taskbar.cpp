@@ -658,40 +658,9 @@ bool IsTaskbarUsable() {
         return false;
     }
 
-    HWND foreground = GetForegroundWindow();
-    if (foreground != nullptr && foreground != g_app.taskbarHwnd) {
-        // Clicking the desktop makes Progman/WorkerW the foreground window.
-        // Its full-screen rectangle must not be mistaken for a fullscreen app.
-        wchar_t foregroundClass[128]{};
-        HWND foregroundRoot = GetAncestor(foreground, GA_ROOT);
-        if (foregroundRoot != nullptr) {
-            GetClassNameW(foregroundRoot, foregroundClass, ARRAYSIZE(foregroundClass));
-        }
-        const bool desktopForeground =
-            _wcsicmp(foregroundClass, L"Progman") == 0 ||
-            _wcsicmp(foregroundClass, L"WorkerW") == 0;
-
-        // A fullscreen app on another monitor must not hide the widget on the
-        // primary taskbar. Only a foreground window on the taskbar monitor can
-        // actually cover this taskbar.
-        const HMONITOR taskbarMonitor = MonitorFromWindow(taskbar, MONITOR_DEFAULTTONEAREST);
-        const HMONITOR foregroundMonitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST);
-
-        RECT foregroundRect{};
-        if (!desktopForeground && foregroundMonitor == taskbarMonitor &&
-            GetWindowRect(foreground, &foregroundRect)) {
-            MONITORINFO monitorInfo{};
-            monitorInfo.cbSize = sizeof(monitorInfo);
-            if (GetMonitorInfoW(foregroundMonitor, &monitorInfo)) {
-                const RECT& screen = monitorInfo.rcMonitor;
-                if (foregroundRect.left <= screen.left + 1 && foregroundRect.top <= screen.top + 1 &&
-                    foregroundRect.right >= screen.right - 1 &&
-                    foregroundRect.bottom >= screen.bottom - 1) {
-                    return false;
-                }
-            }
-        }
-    }
+    // Do not hide the widget just because another window is fullscreen.
+    // The widget is an owned window above the taskbar, and the user expects
+    // the taskbar monitor to stay visible until the taskbar itself disappears.
     return true;
 }
 
