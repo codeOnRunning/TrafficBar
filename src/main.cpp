@@ -80,7 +80,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.16.4\n\n";
+    std::wstring message = L"TrafficBar 0.17.0\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;
@@ -460,8 +460,17 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR commandLine, int) {
         if (message.message == g_app.taskbarCreatedMessage) {
             if (g_app.taskbarHwnd != nullptr && IsWindow(g_app.taskbarHwnd)) {
                 if (HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr)) {
-                    SetWindowLongPtrW(g_app.taskbarHwnd, GWLP_HWNDPARENT,
-                                      reinterpret_cast<LONG_PTR>(taskbar));
+                    HWND parent = FindWindowExW(taskbar, nullptr, L"ReBarWindow32", nullptr);
+                    if (parent == nullptr) {
+                        parent = FindWindowExW(taskbar, nullptr, L"WorkerW", nullptr);
+                    }
+                    if (parent != nullptr) {
+                        SetWindowLongPtrW(g_app.taskbarHwnd, GWL_STYLE,
+                                          (GetWindowLongPtrW(g_app.taskbarHwnd, GWL_STYLE) &
+                                           ~WS_POPUP) |
+                                              WS_CHILD);
+                        SetParent(g_app.taskbarHwnd, parent);
+                    }
                 }
             }
             AddTrayIcon();

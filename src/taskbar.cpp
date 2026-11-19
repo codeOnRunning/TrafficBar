@@ -509,6 +509,11 @@ void EnsureAboveTaskbar() {
         return;
     }
 
+    // Child windows embedded in the taskbar already share its z-order.
+    if (GetParent(g_app.taskbarHwnd) != nullptr) {
+        return;
+    }
+
     // Do not keep reasserting HWND_TOPMOST in response to taskbar clicks.
     // Reordering a topmost popup against the taskbar on every click makes the
     // compact widget visibly blink. The window is already created topmost;
@@ -1499,12 +1504,24 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         return false;
     }
 
-    // Keep the popup in the taskbar's owned-window band. An owned window stays
-    // above its owner during taskbar activation, so clicking the taskbar does
-    // not require a repeated HWND_TOPMOST fight.
-    if (HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr)) {
-        SetWindowLongPtrW(g_app.taskbarHwnd, GWLP_HWNDPARENT,
-                          reinterpret_cast<LONG_PTR>(taskbar));
+    // Embed the compact window in the taskbar's rebar, like TrafficMonitor
+    // does. A child never has to fight the taskbar for topmost z-order and
+    // remains above the taskbar contents even after session unlock.
+    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+    HWND taskbarParent = nullptr;
+    if (taskbar != nullptr) {
+        taskbarParent = FindWindowExW(taskbar, nullptr, L"ReBarWindow32", nullptr);
+        if (taskbarParent == nullptr) {
+            taskbarParent = FindWindowExW(taskbar, nullptr, L"WorkerW", nullptr);
+        }
+    }
+    if (taskbarParent != nullptr) {
+        SetWindowLongPtrW(g_app.taskbarHwnd, GWL_STYLE,
+                          (GetWindowLongPtrW(g_app.taskbarHwnd, GWL_STYLE) & ~WS_POPUP) |
+                              WS_CHILD);
+        SetWindowLongPtrW(g_app.taskbarHwnd, GWL_EXSTYLE,
+                          GetWindowLongPtrW(g_app.taskbarHwnd, GWL_EXSTYLE) & ~WS_EX_TOPMOST);
+        SetParent(g_app.taskbarHwnd, taskbarParent);
     }
 
     WTSRegisterSessionNotification(g_app.taskbarHwnd, NOTIFY_FOR_THIS_SESSION);
@@ -1602,7 +1619,13 @@ void RefreshTaskbarWindow(bool force) {
         if (force && g_app.lastThemeSampleTick == 0) {
             UpdateThemeColors(true);
         }
-        SetWindowPos(g_app.taskbarHwnd, HWND_TOPMOST, x, y, width, height,
+        HWND insertAfter = HWND_TOPMOST;
+        POINT windowPos{x, y};
+        if (HWND parent = GetParent(g_app.taskbarHwnd)) {
+            ScreenToClient(parent, &windowPos);
+            insertAfter = HWND_TOP;
+        }
+        SetWindowPos(g_app.taskbarHwnd, insertAfter, windowPos.x, windowPos.y, width, height,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
         g_app.width = width;
         g_app.height = height;
