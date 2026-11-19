@@ -80,7 +80,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.16.2\n\n";
+    std::wstring message = L"TrafficBar 0.16.3\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;
@@ -458,6 +458,12 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR commandLine, int) {
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         if (message.message == g_app.taskbarCreatedMessage) {
+            if (g_app.taskbarHwnd != nullptr && IsWindow(g_app.taskbarHwnd)) {
+                if (HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr)) {
+                    SetWindowLongPtrW(g_app.taskbarHwnd, GWLP_HWNDPARENT,
+                                      reinterpret_cast<LONG_PTR>(taskbar));
+                }
+            }
             AddTrayIcon();
             g_app.lastThemeSampleTick = 0;
             RefreshTaskbarWindow(true);

@@ -1530,6 +1530,14 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         return false;
     }
 
+    // Keep the popup in the taskbar's owned-window band. An owned window stays
+    // above its owner during taskbar activation, so clicking the taskbar does
+    // not require a repeated HWND_TOPMOST fight.
+    if (HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr)) {
+        SetWindowLongPtrW(g_app.taskbarHwnd, GWLP_HWNDPARENT,
+                          reinterpret_cast<LONG_PTR>(taskbar));
+    }
+
     WTSRegisterSessionNotification(g_app.taskbarHwnd, NOTIFY_FOR_THIS_SESSION);
     EnsureFont(96, true);
     g_app.sampler.SetPreferredAdapter(g_app.config.adapterLuid);
