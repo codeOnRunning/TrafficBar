@@ -122,9 +122,11 @@ void ApplySettingsTheme(HWND hwnd) {
     const BOOL darkTitle = g_app.lightTheme ? FALSE : TRUE;
     DwmSetWindowAttribute(hwnd, 20, &darkTitle, sizeof(darkTitle));
 
+    // The dark visual style of a multiline EDIT can override the text color
+    // while a selection is moving. Keep the multiline items editor on the
+    // stable system edit path and supply its colors through WM_CTLCOLOREDIT.
+    SetWindowTheme(g_itemsEdit, L"", L"");
     const wchar_t* editTheme = g_app.lightTheme ? L"Explorer" : L"DarkMode_Explorer";
-    SetWindowTheme(g_itemsEdit, editTheme, nullptr);
-    SetWindowTheme(g_itemsEdit, editTheme, L"ScrollBar");
     SetWindowTheme(g_primaryEdit, editTheme, nullptr);
     SetWindowTheme(g_refreshEdit, editTheme, nullptr);
 
