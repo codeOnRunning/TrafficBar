@@ -274,10 +274,13 @@ void PaintHoverTip(HWND hwnd) {
     RECT client{};
     GetClientRect(hwnd, &client);
 
+    // Follow the current theme colors; the window is 30% opaque so this acts
+    // as a translucent tinted panel.
     HBRUSH background = CreateSolidBrush(g_app.backgroundColor);
     FillRect(dc, &client, background);
     DeleteObject(background);
 
+    const COLORREF textColor = g_app.textColor;
     const COLORREF borderColor =
         g_app.lightTheme ? RGB(180, 180, 180) : RGB(82, 82, 124);
     HBRUSH border = CreateSolidBrush(borderColor);
@@ -291,7 +294,7 @@ void PaintHoverTip(HWND hwnd) {
     const int lineHeight = metrics.tmHeight + 2;
     int y = 6;
     for (const auto& line : g_hoverLines) {
-        SetTextColor(dc, g_app.textColor);
+        SetTextColor(dc, textColor);
         TextOutW(dc, 9, y, line.c_str(), static_cast<int>(line.size()));
         y += lineHeight;
     }
@@ -299,7 +302,7 @@ void PaintHoverTip(HWND hwnd) {
                                        kHoverVisibleStocks);
     for (int i = 0; i < visibleStocks; ++i) {
         const std::wstring& line = g_hoverStockLines[static_cast<size_t>(g_hoverScrollOffset + i)];
-        SetTextColor(dc, g_app.textColor);
+        SetTextColor(dc, textColor);
         TextOutW(dc, 9, y, line.c_str(), static_cast<int>(line.size()));
         y += lineHeight;
     }
@@ -508,9 +511,13 @@ bool CreateHoverTipWindow() {
     }
 
     EnsureHoverFont();
-    g_hoverTip = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, kHoverTipClass,
-                                 L"", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
-                                 g_app.instance, nullptr);
+    g_hoverTip = CreateWindowExW(
+        WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED, kHoverTipClass, L"",
+        WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, g_app.instance, nullptr);
+    if (g_hoverTip != nullptr) {
+        // Semi-transparent tooltip; still receives wheel and drag input.
+        SetLayeredWindowAttributes(g_hoverTip, 0, 115, LWA_ALPHA);
+    }
     return g_hoverTip != nullptr;
 }
 
@@ -1277,9 +1284,9 @@ void PaintTaskbar(HWND hwnd) {
     HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
     HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
     if (g_app.transparentBackground) {
-        // Faint backdrop close to the taskbar color. The window alpha keeps it
-        // almost invisible while preserving mouse hit-testing.
-        HBRUSH clearBrush = CreateSolidBrush(g_app.backgroundColor);
+        // True transparency: paint the color key so the taskbar shows through
+        // untouched. Only glyphs remain visible.
+        HBRUSH clearBrush = CreateSolidBrush(kTransparentKey);
         FillRect(memory, &client, clearBrush);
         DeleteObject(clearBrush);
     } else {
@@ -1513,7 +1520,7 @@ void ApplyLayeredTransparency() {
         }
         // Whole-window alpha: text must stay readable, so keep it high.
         // The background is painted with a near-taskbar tint instead.
-        SetLayeredWindowAttributes(hwnd, 0, 225, LWA_ALPHA);
+        SetLayeredWindowAttributes(hwnd, kTransparentKey, 0, LWA_COLORKEY);
     } else if (layered) {
 
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
@@ -1600,8 +1607,8 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         POINT pt{};
         GetCursorPos(&pt);
         if (g_lastClickTick != 0 && now - g_lastClickTick <= GetDoubleClickTime() &&
-            std::abs(pt.x - g_lastClickPoint.x) <= 4 &&
-            std::abs(pt.y - g_lastClickPoint.y) <= 4) {
+            std::abs(pt.x - g_lastClickPoint.x) <= 12 &&
+            std::abs(pt.y - g_lastClickPoint.y) <= 12) {
             g_lastClickTick = 0;
             ShellExecuteW(nullptr, L"open", L"taskmgr.exe", nullptr, nullptr, SW_SHOWNORMAL);
             return 0;
@@ -1758,7 +1765,7 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         return false;
     }
     if (g_app.transparentBackground) {
-        SetLayeredWindowAttributes(g_app.taskbarHwnd, 0, 225, LWA_ALPHA);
+        SetLayeredWindowAttributes(g_app.taskbarHwnd, kTransparentKey, 0, LWA_COLORKEY);
     }
 
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
