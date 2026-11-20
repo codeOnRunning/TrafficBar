@@ -80,7 +80,7 @@ void LoadConfig() {
     g_app.config.fontSize = GetPrivateProfileIntW(L"general", L"font_size", 9, path);
     g_app.config.fontSize = std::clamp(g_app.config.fontSize, 8, 12);
     g_app.config.themeMode =
-        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"theme_mode", 0, path)), 0, 11);
+        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"theme_mode", 0, path)), 0, 10);
 
     wchar_t luidBuffer[64]{};
     GetPrivateProfileStringW(L"general", L"adapter_luid", L"0", luidBuffer,

@@ -40,7 +40,6 @@ enum MenuCommand : UINT {
     IDM_THEME_ORANGE = 7009,
     IDM_THEME_TEAL = 7010,
     IDM_THEME_WINE = 7011,
-    IDM_THEME_TRANSPARENT = 7012,
     IDM_ADAPTER_AUTO = 2001,
     IDM_ADAPTER_BASE = 2100,
     IDM_INTERVAL_500 = 3001,
@@ -81,7 +80,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.21.1\n\n";
+    std::wstring message = L"TrafficBar 0.21.2\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;
@@ -135,9 +134,7 @@ void HandleMenuCommand(HWND owner, UINT command, const std::vector<AdapterInfo>&
     } else if (command == IDM_THEME_WINE) {
         g_app.config.themeMode = 10;
         themeChanged = true;
-    } else if (command == IDM_THEME_TRANSPARENT) {
-        g_app.config.themeMode = 11;
-        themeChanged = true;
+
     } else if (command == IDM_ADAPTER_AUTO) {
         g_app.config.adapterLuid = 0;
         g_app.sampler.SetPreferredAdapter(0);
@@ -314,10 +311,6 @@ void ShowAppMenu(HWND owner, POINT pt) {
         AppendMenuW(themeMenu,
                     MF_STRING | (g_app.config.themeMode == 10 ? MF_CHECKED : MF_UNCHECKED),
                     IDM_THEME_WINE, L"酒红");
-        AppendMenuW(themeMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(themeMenu,
-                    MF_STRING | (g_app.config.themeMode == 11 ? MF_CHECKED : MF_UNCHECKED),
-                    IDM_THEME_TRANSPARENT, L"透明");
         AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(themeMenu), L"外观主题");
     }
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);

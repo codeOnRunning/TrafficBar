@@ -831,7 +831,7 @@ void UpdateThemeColors(bool force) {
     }
     g_app.backgroundColor = background;
 
-    g_app.transparentBackground = g_app.config.themeMode == 11;
+    g_app.transparentBackground = false;  // transparent theme removed
     g_app.transparentAlpha =
         std::clamp(g_app.config.transparentAlpha, 0, 255);
 
