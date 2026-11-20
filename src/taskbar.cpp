@@ -48,6 +48,7 @@ RECT g_hoverThumbRect{};
 int g_hoverTrackTop = 0;
 int g_hoverTrackHeight = 0;
 bool g_hoverDragging = false;
+bool g_hoverTimerArmed = false;
 ULONGLONG g_lastClickTick = 0;
 POINT g_lastClickPoint{};
 int g_hoverDragStartY = 0;
@@ -143,17 +144,20 @@ void CheckHoverWatchArea() {
     if (g_hoverVisible || g_hoverWatchRect.right <= g_hoverWatchRect.left) {
         return;
     }
-    // Only needed when part of the widget is hidden (stock block off-hours).
-    if (g_app.config.customEnabled &&
-        (!g_app.config.hideStockOffHours || g_app.quote.IsMarketOpen())) {
-        return;
-    }
+    // Runs for every theme: a transparent widget can miss WM_MOUSEMOVE, and
+    // the widget is narrow, so polling the watch rect keeps the hover tip
+    // appearing as soon as the cursor is over the strip.
     POINT cursor{};
     if (!GetCursorPos(&cursor)) {
         return;
     }
     if (PtInRect(&g_hoverWatchRect, cursor)) {
-        SetTimer(g_app.taskbarHwnd, kTimerHoverShow, 300, nullptr);
+        if (!g_hoverTimerArmed) {
+            g_hoverTimerArmed = true;
+            SetTimer(g_app.taskbarHwnd, kTimerHoverShow, 250, nullptr);
+        }
+    } else {
+        g_hoverTimerArmed = false;
     }
 }
 
@@ -435,6 +439,11 @@ LRESULT CALLBACK HoverTipWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         return 0;
     case WM_ERASEBKGND:
         return 1;
+
+    case WM_NCHITTEST:
+        // Color-key transparency makes hit-testing report nothing; keep the
+        // widget clickable so hover and double-click still work.
+        return HTCLIENT;
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
     case WM_MOUSEWHEEL:
@@ -590,8 +599,11 @@ void EnsureFont(int dpi, bool force = false) {
     }
     g_app.dpi = dpi;
     const int height = -MulDiv(g_app.config.fontSize, dpi, 72);
+    // Unhook ClearType for the regular font so the transparent widget's glyphs
+    // are drawn with antialiasing quality that stays within the color-key path.
+    const BYTE quality = g_app.transparentBackground ? ANTIALIASED_QUALITY : CLEARTYPE_QUALITY;
     g_app.font = CreateFontW(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, quality,
                              DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
     if (g_app.font == nullptr) {
         g_app.font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
@@ -874,6 +886,7 @@ void UpdateThemeColors(bool force) {
     // child window cannot use per-pixel alpha together with color-key
     // transparency, so transparency is expressed through the color key.
     if (g_app.transparentBackground) {
+        // Keep the sampled taskbar color; it is used as the faint backdrop.
         g_app.backgroundColor = g_app.config.transparentThemeDark ? RGB(18, 18, 24)
                                                                   : RGB(34, 31, 56);
         const int bl = (299 * GetRValue(g_app.backgroundColor) +
@@ -1092,6 +1105,11 @@ LRESULT CALLBACK SecondaryTaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam,
     }
     case WM_ERASEBKGND:
         return 1;
+
+    case WM_NCHITTEST:
+        // Color-key transparency makes hit-testing report nothing; keep the
+        // widget clickable so hover and double-click still work.
+        return HTCLIENT;
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
     case WM_MOUSEMOVE:
@@ -1258,12 +1276,22 @@ void PaintTaskbar(HWND hwnd) {
     HDC memory = CreateCompatibleDC(dc);
     HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
     HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
-    HBRUSH background = CreateSolidBrush(
-        g_app.backgroundColor);
-    FillRect(memory, &client, background);
-    DeleteObject(background);
+    if (g_app.transparentBackground) {
+        // Faint backdrop close to the taskbar color. The window alpha keeps it
+        // almost invisible while preserving mouse hit-testing.
+        HBRUSH clearBrush = CreateSolidBrush(g_app.backgroundColor);
+        FillRect(memory, &client, clearBrush);
+        DeleteObject(clearBrush);
+    } else {
+        HBRUSH background = CreateSolidBrush(g_app.backgroundColor);
+        FillRect(memory, &client, background);
+        DeleteObject(background);
+    }
 
     SetBkMode(memory, TRANSPARENT);
+    // ClearType would produce colored fringes that never equal the color key,
+    // leaving visible halo pixels on a transparent widget. Use grayscale AA.
+    SetTextColor(memory, RGB(0, 0, 0));
     g_app.currentMemoryDc = memory;
     HGDIOBJ oldFont = SelectObject(memory, g_app.font);
 
@@ -1483,8 +1511,9 @@ void ApplyLayeredTransparency() {
         if (!layered) {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
         }
-        SetLayeredWindowAttributes(hwnd, kTransparentKey, 0, LWA_COLORKEY);
-        SetLayeredWindowAttributes(hwnd, 0, 200, LWA_ALPHA);
+        // Whole-window alpha: text must stay readable, so keep it high.
+        // The background is painted with a near-taskbar tint instead.
+        SetLayeredWindowAttributes(hwnd, 0, 225, LWA_ALPHA);
     } else if (layered) {
 
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
@@ -1523,6 +1552,7 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         }
         if (wParam == kTimerHoverShow) {
             KillTimer(hwnd, kTimerHoverShow);
+            g_hoverTimerArmed = false;
             g_hoverTaskbar = nullptr;
             g_hoverSurfaceRect = g_app.windowRect;
             ShowHoverTip();
@@ -1559,6 +1589,11 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_ERASEBKGND:
         return 1;
+
+    case WM_NCHITTEST:
+        // Color-key transparency makes hit-testing report nothing; keep the
+        // widget clickable so hover and double-click still work.
+        return HTCLIENT;
 
     case WM_LBUTTONDOWN: {
         const ULONGLONG now = GetTickCount64();
@@ -1723,8 +1758,7 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         return false;
     }
     if (g_app.transparentBackground) {
-        SetLayeredWindowAttributes(g_app.taskbarHwnd, 0,
-                                   static_cast<BYTE>(g_app.transparentAlpha), LWA_ALPHA);
+        SetLayeredWindowAttributes(g_app.taskbarHwnd, 0, 225, LWA_ALPHA);
     }
 
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
@@ -1848,11 +1882,11 @@ void RefreshTaskbarWindow(bool force) {
     }
     if (stockVisibleNow != lastStockVisible) {
         lastStockVisible = stockVisibleNow;
-        g_hoverWatchRect = RECT{x - hiddenStockWidth, y, x + width, y + height};
         InvalidateRect(g_app.taskbarHwnd, nullptr, FALSE);
-    } else {
-        g_hoverWatchRect = RECT{x - hiddenStockWidth, y, x + width, y + height};
     }
+    // Always cover the strip itself plus the area where the stock block would
+    // be, so hovering anywhere over the widget triggers the tip.
+    g_hoverWatchRect = RECT{x - hiddenStockWidth, y, x + width, y + height};
 
     if (changed) {
         // Theme sampling is expensive because it reads many screen pixels.
