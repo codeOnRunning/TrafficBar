@@ -817,10 +817,18 @@ void UpdateThemeColors(bool force) {
         background = RGB(0, 121, 107);
     } else if (g_app.config.themeMode == 10) {
         background = RGB(136, 14, 45);
+    } else if (g_app.config.themeMode == 11) {
+        // Transparent theme: the window itself is alpha-blended, so any
+        // background color works. Keep a neutral dark tint behind the text.
+        background = RGB(20, 20, 28);
     } else if (g_app.config.themeMode == 0) {
         background = SampleTaskbarColor();
     }
     g_app.backgroundColor = background;
+
+    g_app.transparentBackground = g_app.config.themeMode == 11;
+    g_app.transparentAlpha =
+        std::clamp(g_app.config.transparentAlpha, 0, 255);
 
     const int luminance =
         (299 * GetRValue(background) + 587 * GetGValue(background) + 114 * GetBValue(background)) /
@@ -1204,9 +1212,19 @@ void PaintTaskbar(HWND hwnd) {
     HDC memory = CreateCompatibleDC(dc);
     HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
     HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
-    HBRUSH background = CreateSolidBrush(g_app.backgroundColor);
+    HBRUSH background = CreateSolidBrush(
+        g_app.transparentBackground ? RGB(0, 0, 0) : g_app.backgroundColor);
     FillRect(memory, &client, background);
     DeleteObject(background);
+
+    // Alpha-blended (transparent) theme: clear to fully transparent black so
+    // only the drawn text and icons remain visible over the taskbar.
+    if (g_app.transparentBackground) {
+        RECT full{0, 0, width, height};
+        HBRUSH clearBrush = CreateSolidBrush(RGB(0, 0, 0));
+        FillRect(memory, &full, clearBrush);
+        DeleteObject(clearBrush);
+    }
 
     SetBkMode(memory, TRANSPARENT);
     HGDIOBJ oldFont = SelectObject(memory, g_app.font);
@@ -1344,6 +1362,27 @@ void PaintTaskbar(HWND hwnd) {
     DeleteObject(bitmap);
     DeleteDC(memory);
     EndPaint(hwnd, &paint);
+}
+
+// Applies or removes layered alpha blending for the transparent theme.
+// Called before painting so the first frame is already alpha-blended.
+void ApplyLayeredTransparency() {
+    if (g_app.taskbarHwnd == nullptr) {
+        return;
+    }
+    HWND hwnd = g_app.taskbarHwnd;
+    const bool transparent = g_app.transparentBackground;
+    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    const bool layered = (exStyle & WS_EX_LAYERED) != 0;
+    if (transparent) {
+        if (!layered) {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+        }
+        SetLayeredWindowAttributes(hwnd, 0, static_cast<BYTE>(g_app.transparentAlpha), LWA_ALPHA);
+    } else if (layered) {
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+    }
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
 LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -1541,16 +1580,22 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         return false;
     }
 
-    g_app.taskbarHwnd =
-        CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kWindowClass, kAppName, WS_POPUP, 0, 0,
-                        10, 10, nullptr, nullptr, instance, nullptr);
-    if (g_app.taskbarHwnd == nullptr) {
-        return false;
-    }
-
     // Embed the compact window in the taskbar's rebar, like TrafficMonitor
     // does. A child never has to fight the taskbar for topmost z-order and
     // remains above the taskbar contents even after session unlock.
+    UpdateThemeColors(true);
+    const DWORD startExStyle = WS_EX_TOOLWINDOW | WS_EX_TOPMOST |
+                               (g_app.transparentBackground ? WS_EX_LAYERED : 0);
+    g_app.taskbarHwnd = CreateWindowExW(startExStyle, kWindowClass, kAppName, WS_POPUP, 0, 0,
+                                        10, 10, nullptr, nullptr, instance, nullptr);
+    if (g_app.taskbarHwnd == nullptr) {
+        return false;
+    }
+    if (g_app.transparentBackground) {
+        SetLayeredWindowAttributes(g_app.taskbarHwnd, 0,
+                                   static_cast<BYTE>(g_app.transparentAlpha), LWA_ALPHA);
+    }
+
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
     HWND taskbarParent = nullptr;
     if (taskbar != nullptr) {
@@ -1690,6 +1735,9 @@ void RefreshTaskbarWindow(bool force) {
             ScreenToClient(parent, &windowPos);
             insertAfter = HWND_TOP;
         }
+        // Apply layered transparency before painting so the first frame is
+        // already alpha-blended instead of flashing an opaque rectangle.
+        ApplyLayeredTransparency();
         SetWindowPos(g_app.taskbarHwnd, insertAfter, windowPos.x, windowPos.y, width, height,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
         g_app.width = width;

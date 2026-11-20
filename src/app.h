@@ -15,7 +15,9 @@ struct AppConfig {
     uint64_t adapterLuid = 0;   // 0 = auto
     int intervalMs = 1000;
     int fontSize = 9;
-    int themeMode = 0;  // 0 auto, 1 dark, 2 light, 3 navy, 4 forest, 5-10 color presets
+    int themeMode = 0;  // 0 auto, 1 dark, 2 light, 3 navy, 4 forest, 5-10 colors, 11 transparent
+    int transparentAlpha = 40;  // 0 = see-through, 255 = opaque (transparent theme only)
+
 
     bool customEnabled = false;
     std::wstring customPrimary;
@@ -47,6 +49,8 @@ struct AppState {
     bool sessionLocked = false;
 
     COLORREF backgroundColor = RGB(29, 29, 60);
+    bool transparentBackground = false;
+    int transparentAlpha = 40;
     COLORREF textColor = RGB(245, 245, 245);
     COLORREF labelColor = RGB(196, 196, 212);
     COLORREF upColor = RGB(120, 215, 130);

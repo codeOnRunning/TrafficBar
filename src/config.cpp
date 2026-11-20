@@ -80,7 +80,7 @@ void LoadConfig() {
     g_app.config.fontSize = GetPrivateProfileIntW(L"general", L"font_size", 9, path);
     g_app.config.fontSize = std::clamp(g_app.config.fontSize, 8, 12);
     g_app.config.themeMode =
-        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"theme_mode", 0, path)), 0, 10);
+        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"theme_mode", 0, path)), 0, 11);
 
     wchar_t luidBuffer[64]{};
     GetPrivateProfileStringW(L"general", L"adapter_luid", L"0", luidBuffer,
@@ -103,6 +103,10 @@ void LoadConfig() {
                    1000, 60000);
     g_app.config.customShowPercent =
         GetPrivateProfileIntW(L"custom", L"show_percent", 0, path) != 0;
+    g_app.config.transparentAlpha =
+        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"transparent_alpha", 40,
+                                                          path)),
+                   0, 255);
     g_app.config.hideStockOffHours =
         GetPrivateProfileIntW(L"custom", L"hide_off_hours", 1, path) != 0;
 
@@ -153,6 +157,10 @@ void SaveConfig() {
     wchar_t theme[32]{};
     swprintf_s(theme, L"%d", g_app.config.themeMode);
     append(general, L"theme_mode", theme);
+
+    wchar_t alpha[32]{};
+    swprintf_s(alpha, L"%d", g_app.config.transparentAlpha);
+    append(general, L"transparent_alpha", alpha);
 
     wchar_t luid[32]{};
     swprintf_s(luid, L"%016llX", static_cast<unsigned long long>(g_app.config.adapterLuid));
