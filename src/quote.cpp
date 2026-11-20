@@ -193,8 +193,20 @@ bool IsAShareOpen(const SYSTEMTIME& utc) {
         return false;
     }
     const int minutes = MinutesOfDay(local);
-    return InRange(minutes, 9 * 60 + 15, 11 * 60 + 30) ||
-           InRange(minutes, 13 * 60, 15 * 60 + 5);
+    return InRange(minutes, 9 * 60 + 30, 11 * 60 + 30) ||
+           InRange(minutes, 13 * 60, 15 * 60);
+}
+
+bool IsAShareAuction(const SYSTEMTIME& utc) {
+    const SYSTEMTIME local = AddHours(utc, 8);
+    if (!IsWeekday(local)) {
+        return false;
+    }
+    const int minutes = MinutesOfDay(local);
+    // Call auction and closing auction windows, plus the short gap around
+    // them, so the taskbar can still show quotes while the market is trading.
+    return InRange(minutes, 9 * 60 + 15, 9 * 60 + 30) ||
+           InRange(minutes, 14 * 60 + 55, 15 * 60 + 5);
 }
 
 bool IsHongKongOpen(const SYSTEMTIME& utc) {
@@ -244,6 +256,24 @@ bool IsAnyMarketOpen(const std::vector<CustomItem>& items) {
                 }
             } else if (first == L'u' && second == L's') {
                 if (IsUsOpen(utc)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool HasAnyAuctionPhase(const std::vector<CustomItem>& items) {
+    SYSTEMTIME utc{};
+    GetSystemTime(&utc);
+    for (const auto& item : items) {
+        if (item.code.size() >= 2) {
+            const wchar_t first = static_cast<wchar_t>(towlower(item.code[0]));
+            const wchar_t second = static_cast<wchar_t>(towlower(item.code[1]));
+            if ((first == L's' && (second == L'h' || second == L'z')) ||
+                (first == L'b' && second == L'j')) {
+                if (IsAShareAuction(utc)) {
                     return true;
                 }
             }
@@ -322,9 +352,12 @@ void QuoteService::WorkerMain() {
                 break;
             }
             items = items_;
-            if (AnyMarketOpen(items)) {
+            const bool open = AnyMarketOpen(items);
+            if (open) {
                 interval = refreshMs_;
             }
+            marketOpen_ = open;
+            auctionPhase_ = HasAnyAuctionPhase(items);
         }
 
         if (!items.empty()) {
@@ -391,4 +424,14 @@ void QuoteService::FetchOnce() {
 
 bool QuoteService::AnyMarketOpen(const std::vector<CustomItem>& items) const {
     return IsAnyMarketOpen(items);
+}
+
+bool QuoteService::IsMarketOpen() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return marketOpen_;
+}
+
+bool QuoteService::HasAuctionPhase() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return auctionPhase_;
 }

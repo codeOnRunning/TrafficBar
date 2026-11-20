@@ -29,6 +29,10 @@ std::vector<SecondaryTaskbarSurface> g_secondaryTaskbars;
 HWND g_hoverTip = nullptr;
 HWND g_hoverTaskbar = nullptr;
 RECT g_hoverSurfaceRect{};
+// Screen rect larger than the visible strip; used for hover detection when
+// the stock block (and therefore part of the widget) is hidden off-hours.
+RECT g_hoverWatchRect{};
+void CheckHoverWatchArea();
 HFONT g_hoverFont = nullptr;
 bool g_hoverVisible = false;
 std::vector<std::wstring> g_hoverLines;
@@ -113,12 +117,39 @@ std::wstring PrimaryQuoteText() {
     if (!g_app.config.customEnabled) {
         return L"";
     }
+    // Hide the stock from the taskbar outside trading hours. The hover tip
+    // keeps showing quotes regardless, so this only affects the compact strip.
+    if (g_app.config.hideStockOffHours && !g_app.quote.IsMarketOpen()) {
+        return L"";
+    }
     const std::vector<QuoteSnapshot> quotes = g_app.quote.Snapshot();
     const QuoteSnapshot* quote = FindPrimaryQuote(quotes);
     if (quote == nullptr) {
         return g_app.config.customPrimary + L" --";
     }
     return FormatQuoteText(*quote);
+}
+
+void ShowHoverTip();
+void BuildHoverLines();
+void MeasureHoverTip();
+void PositionHoverTip();
+void CheckHoverWatchArea() {
+    if (g_hoverVisible || g_hoverWatchRect.right <= g_hoverWatchRect.left) {
+        return;
+    }
+    // Only needed when part of the widget is hidden (stock block off-hours).
+    if (g_app.config.customEnabled &&
+        (!g_app.config.hideStockOffHours || g_app.quote.IsMarketOpen())) {
+        return;
+    }
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        return;
+    }
+    if (PtInRect(&g_hoverWatchRect, cursor)) {
+        SetTimer(g_app.taskbarHwnd, kTimerHoverShow, 300, nullptr);
+    }
 }
 
 void BuildHoverLines() {
@@ -365,6 +396,10 @@ void ShowHoverTip() {
     if (g_hoverTip == nullptr) {
         return;
     }
+    if (!g_hoverVisible) {
+        BuildHoverLines();
+        MeasureHoverTip();
+    }
     PositionHoverTip();
     g_hoverVisible = true;
     InvalidateRect(g_hoverTip, nullptr, FALSE);
@@ -494,6 +529,10 @@ void HideHoverTipIfLeft() {
     if (PtInRect(&taskbarRect, cursor)) {
         return;
     }
+    if (g_hoverWatchRect.right > g_hoverWatchRect.left &&
+        PtInRect(&g_hoverWatchRect, cursor)) {
+        return;
+    }
     RECT hoverRect{};
     if (GetWindowRect(g_hoverTip, &hoverRect)) {
         InflateRect(&hoverRect, 8, 8);
@@ -562,6 +601,9 @@ int SpeedColumnWidth(HDC dc) {
 
 int CustomColumnWidth(HDC dc) {
     if (!g_app.config.customEnabled || g_app.config.customItems.empty()) {
+        return 0;
+    }
+    if (g_app.config.hideStockOffHours && !g_app.quote.IsMarketOpen()) {
         return 0;
     }
     std::wstring sample = g_app.config.customPrimary;
@@ -1213,7 +1255,8 @@ void PaintTaskbar(HWND hwnd) {
                 drawLine(L"内存", g_app.labelColor, false, false);
                 drawLine(FormatPercent(snapshot.memPercent), g_app.textColor, false, false);
             }
-            if (g_app.config.customEnabled) {
+            if (g_app.config.customEnabled &&
+                (!g_app.config.hideStockOffHours || g_app.quote.IsMarketOpen())) {
                 std::wstring alias = g_app.config.customPrimary;
                 std::wstring price = L"--";
                 std::wstring change = L"--";
@@ -1327,6 +1370,7 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         if (wParam == kTimerZOrder) {
             EnsureAboveTaskbar();
             HideHoverTipIfLeft();
+            CheckHoverWatchArea();
             return 0;
         }
         if (wParam == kTimerHoverShow) {
@@ -1611,6 +1655,27 @@ void RefreshTaskbarWindow(bool force) {
     if (current.left != x || current.top != y || current.right != x + width ||
         current.bottom != y + height) {
         changed = true;
+    }
+
+    // The stock block appears/disappears at market open/close. Repaint when
+    // that visibility flips so the compact strip updates without a hover.
+    // When hidden the widget shrinks, so a strip must be provided next to it
+    // to keep hover detection working outside trading hours.
+    const bool stockVisibleNow =
+        g_app.config.customEnabled &&
+        (!g_app.config.hideStockOffHours || g_app.quote.IsMarketOpen());
+    static bool lastStockVisible = false;
+    static int lastStockWidth = 0;
+    const int hiddenStockWidth = stockVisibleNow ? 0 : lastStockWidth;
+    if (stockVisibleNow) {
+        lastStockWidth = width;
+    }
+    if (stockVisibleNow != lastStockVisible) {
+        lastStockVisible = stockVisibleNow;
+        g_hoverWatchRect = RECT{x - hiddenStockWidth, y, x + width, y + height};
+        InvalidateRect(g_app.taskbarHwnd, nullptr, FALSE);
+    } else {
+        g_hoverWatchRect = RECT{x - hiddenStockWidth, y, x + width, y + height};
     }
 
     if (changed) {

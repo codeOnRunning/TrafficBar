@@ -28,6 +28,8 @@ public:
     void Stop();
 
     std::vector<QuoteSnapshot> Snapshot() const;
+    bool IsMarketOpen() const;
+    bool HasAuctionPhase() const;
 
 private:
     void WorkerMain();
@@ -44,4 +46,6 @@ private:
     bool started_ = false;
     bool stop_ = false;
     bool wakeRequested_ = false;
+    bool marketOpen_ = false;
+    bool auctionPhase_ = false;
 };

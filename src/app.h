@@ -22,6 +22,7 @@ struct AppConfig {
     std::vector<CustomItem> customItems;
     int customRefreshMs = 5000;
     bool customShowPercent = false;
+    bool hideStockOffHours = true;
 };
 
 struct AppState {

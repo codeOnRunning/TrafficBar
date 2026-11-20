@@ -103,6 +103,8 @@ void LoadConfig() {
                    1000, 60000);
     g_app.config.customShowPercent =
         GetPrivateProfileIntW(L"custom", L"show_percent", 0, path) != 0;
+    g_app.config.hideStockOffHours =
+        GetPrivateProfileIntW(L"custom", L"hide_off_hours", 1, path) != 0;
 
     if (g_app.config.customItems.empty()) {
         g_app.config.customEnabled = false;
@@ -185,6 +187,7 @@ void SaveConfig() {
     swprintf_s(refresh, L"%d", g_app.config.customRefreshMs);
     append(custom, L"refresh_ms", refresh);
     append(custom, L"show_percent", g_app.config.customShowPercent ? L"1" : L"0");
+    append(custom, L"hide_off_hours", g_app.config.hideStockOffHours ? L"1" : L"0");
     custom.push_back(L'\0');
     WritePrivateProfileSectionW(L"custom", custom.c_str(), path);
 }
