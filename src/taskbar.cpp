@@ -687,6 +687,12 @@ void DrawRun(HDC dc, const std::wstring& text, int x, int y, COLORREF color) {
     if (text.empty()) {
         return;
     }
+    if (g_app.textShadow && dc == g_app.currentMemoryDc) {
+        // Drop shadow keeps text readable over whatever shows through a
+        // transparent taskbar widget.
+        SetTextColor(dc, RGB(0, 0, 0));
+        TextOutW(dc, x + 1, y + 1, text.c_str(), static_cast<int>(text.size()));
+    }
     SetTextColor(dc, color);
     TextOutW(dc, x, y, text.c_str(), static_cast<int>(text.size()));
 }
@@ -844,6 +850,25 @@ void UpdateThemeColors(bool force) {
         g_app.labelColor = RGB(196, 196, 212);
         g_app.upColor = RGB(120, 215, 130);
         g_app.downColor = RGB(120, 170, 255);
+    }
+
+    // A transparent window is alpha-blended, so the taskbar color shows
+    // through and dark text can become unreadable. Force a high-contrast
+    // light palette with a subtle drop shadow while the transparent theme
+    // is active.
+    g_app.textShadow = g_app.transparentBackground;
+    if (g_app.transparentBackground) {
+        if (g_app.lightTheme) {
+            g_app.textColor = RGB(20, 20, 20);
+            g_app.labelColor = RGB(40, 40, 40);
+            g_app.upColor = RGB(0, 110, 50);
+            g_app.downColor = RGB(10, 70, 170);
+        } else {
+            g_app.textColor = RGB(255, 255, 255);
+            g_app.labelColor = RGB(235, 235, 245);
+            g_app.upColor = RGB(140, 255, 150);
+            g_app.downColor = RGB(150, 195, 255);
+        }
     }
 }
 
@@ -1227,6 +1252,7 @@ void PaintTaskbar(HWND hwnd) {
     }
 
     SetBkMode(memory, TRANSPARENT);
+    g_app.currentMemoryDc = memory;
     HGDIOBJ oldFont = SelectObject(memory, g_app.font);
 
     TEXTMETRICW metrics{};
@@ -1244,6 +1270,14 @@ void PaintTaskbar(HWND hwnd) {
             }
             const int textX = arrow ? kPadding + kArrowWidth : kPadding;
             RECT lineRect{textX, y, width - kPadding, y + lineHeight};
+            if (g_app.textShadow && memory == g_app.currentMemoryDc) {
+                RECT shadowRect = lineRect;
+                shadowRect.left += 1;
+                shadowRect.top += 1;
+                SetTextColor(memory, RGB(0, 0, 0));
+                DrawTextW(memory, text.c_str(), -1, &shadowRect,
+                          DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+            }
             SetTextColor(memory, color);
             DrawTextW(memory, text.c_str(), -1, &lineRect,
                       DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
@@ -1357,6 +1391,7 @@ void PaintTaskbar(HWND hwnd) {
     }
 
     SelectObject(memory, oldFont);
+    g_app.currentMemoryDc = nullptr;
     BitBlt(dc, 0, 0, width, height, memory, 0, 0, SRCCOPY);
     SelectObject(memory, oldBitmap);
     DeleteObject(bitmap);
@@ -1382,6 +1417,8 @@ void ApplyLayeredTransparency() {
     } else if (layered) {
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
     }
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 

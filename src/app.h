@@ -50,7 +50,9 @@ struct AppState {
 
     COLORREF backgroundColor = RGB(29, 29, 60);
     bool transparentBackground = false;
+    bool textShadow = false;
     int transparentAlpha = 40;
+    HDC currentMemoryDc = nullptr;  // memory DC of the in-progress paint
     COLORREF textColor = RGB(245, 245, 245);
     COLORREF labelColor = RGB(196, 196, 212);
     COLORREF upColor = RGB(120, 215, 130);
