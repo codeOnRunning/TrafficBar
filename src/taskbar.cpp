@@ -48,6 +48,8 @@ RECT g_hoverThumbRect{};
 int g_hoverTrackTop = 0;
 int g_hoverTrackHeight = 0;
 bool g_hoverDragging = false;
+ULONGLONG g_lastClickTick = 0;
+POINT g_lastClickPoint{};
 int g_hoverDragStartY = 0;
 int g_hoverDragStartOffset = 0;
 
@@ -872,15 +874,22 @@ void UpdateThemeColors(bool force) {
     // child window cannot use per-pixel alpha together with color-key
     // transparency, so transparency is expressed through the color key.
     if (g_app.transparentBackground) {
-        // The window itself is see-through (color key) and the blur comes
-        // from the acrylic backdrop, so only text is painted here.
-        g_app.backgroundColor = kTransparentKey;
-        g_app.textColor = g_app.config.transparentThemeDark ? RGB(238, 238, 242)
-                                                           : RGB(248, 248, 250);
-        g_app.labelColor = g_app.config.transparentThemeDark ? RGB(200, 200, 214)
-                                                            : RGB(216, 216, 232);
-        g_app.upColor = RGB(126, 226, 132);
-        g_app.downColor = RGB(138, 192, 255);
+        g_app.backgroundColor = g_app.config.transparentThemeDark ? RGB(18, 18, 24)
+                                                                  : RGB(34, 31, 56);
+        const int bl = (299 * GetRValue(g_app.backgroundColor) +
+                        587 * GetGValue(g_app.backgroundColor) +
+                        114 * GetBValue(g_app.backgroundColor)) / 1000;
+        if (bl > 150) {
+            g_app.textColor = RGB(24, 24, 24);
+            g_app.labelColor = RGB(60, 60, 60);
+            g_app.upColor = RGB(0, 110, 50);
+            g_app.downColor = RGB(10, 70, 170);
+        } else {
+            g_app.textColor = RGB(248, 248, 250);
+            g_app.labelColor = RGB(208, 208, 226);
+            g_app.upColor = RGB(126, 226, 132);
+            g_app.downColor = RGB(138, 192, 255);
+        }
     }
 }
 
@@ -1250,7 +1259,7 @@ void PaintTaskbar(HWND hwnd) {
     HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
     HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
     HBRUSH background = CreateSolidBrush(
-        g_app.transparentBackground ? kTransparentKey : g_app.backgroundColor);
+        g_app.backgroundColor);
     FillRect(memory, &client, background);
     DeleteObject(background);
 
@@ -1475,9 +1484,9 @@ void ApplyLayeredTransparency() {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
         }
         SetLayeredWindowAttributes(hwnd, kTransparentKey, 0, LWA_COLORKEY);
-        ApplyAcrylicBackdrop(hwnd);
+        SetLayeredWindowAttributes(hwnd, 0, 200, LWA_ALPHA);
     } else if (layered) {
-        DisableAcrylicBackdrop(hwnd);
+
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
     }
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
@@ -1550,6 +1559,22 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_ERASEBKGND:
         return 1;
+
+    case WM_LBUTTONDOWN: {
+        const ULONGLONG now = GetTickCount64();
+        POINT pt{};
+        GetCursorPos(&pt);
+        if (g_lastClickTick != 0 && now - g_lastClickTick <= GetDoubleClickTime() &&
+            std::abs(pt.x - g_lastClickPoint.x) <= 4 &&
+            std::abs(pt.y - g_lastClickPoint.y) <= 4) {
+            g_lastClickTick = 0;
+            ShellExecuteW(nullptr, L"open", L"taskmgr.exe", nullptr, nullptr, SW_SHOWNORMAL);
+            return 0;
+        }
+        g_lastClickTick = now;
+        g_lastClickPoint = pt;
+        return 0;
+    }
 
     case WM_MOUSEMOVE:
         if (!g_hoverVisible) {
@@ -1676,7 +1701,7 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 bool CreateTaskbarWindow(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
-    windowClass.style = CS_DBLCLKS;
+    windowClass.style = CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = TaskbarWndProc;
     windowClass.hInstance = instance;
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
@@ -1835,10 +1860,11 @@ void RefreshTaskbarWindow(bool force) {
         if (force && g_app.lastThemeSampleTick == 0) {
             UpdateThemeColors(true);
         }
+        HWND taskbarParent = GetParent(g_app.taskbarHwnd);
         HWND insertAfter = HWND_TOPMOST;
         POINT windowPos{x, y};
-        if (HWND parent = GetParent(g_app.taskbarHwnd)) {
-            ScreenToClient(parent, &windowPos);
+        if (taskbarParent != nullptr) {
+            ScreenToClient(taskbarParent, &windowPos);
             insertAfter = HWND_TOP;
         }
         // Apply layered transparency before painting so the first frame is
@@ -1846,6 +1872,13 @@ void RefreshTaskbarWindow(bool force) {
         ApplyLayeredTransparency();
         SetWindowPos(g_app.taskbarHwnd, insertAfter, windowPos.x, windowPos.y, width, height,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        // A child sinks below later siblings by default, which would put the
+        // task list on top of the widget and break clicks and double-clicks.
+        // Keep it as the topmost child of the rebar after every placement.
+        if (taskbarParent != nullptr) {
+            SetWindowPos(g_app.taskbarHwnd, HWND_TOP, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
         g_app.width = width;
         g_app.height = height;
         g_app.windowRect = {x, y, x + width, y + height};
