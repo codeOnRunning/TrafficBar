@@ -16,6 +16,9 @@ constexpr const wchar_t* kSecondaryTaskbarClass = L"TrafficBar.SecondaryTaskbar"
 constexpr UINT_PTR kTimerHoverShow = 3;
 constexpr UINT_PTR kTimerThemeRefresh = 4;
 constexpr int kHoverVisibleStocks = 3;
+// Color key used by the transparent theme. This exact color is painted as the
+// widget background and becomes see-through via LWA_COLORKEY.
+constexpr COLORREF kTransparentKey = RGB(1, 2, 3);
 constexpr int kHoverScrollbarWidth = 8;
 
 struct SecondaryTaskbarSurface {
@@ -687,12 +690,6 @@ void DrawRun(HDC dc, const std::wstring& text, int x, int y, COLORREF color) {
     if (text.empty()) {
         return;
     }
-    if (g_app.textShadow && dc == g_app.currentMemoryDc) {
-        // Drop shadow keeps text readable over whatever shows through a
-        // transparent taskbar widget.
-        SetTextColor(dc, RGB(0, 0, 0));
-        TextOutW(dc, x + 1, y + 1, text.c_str(), static_cast<int>(text.size()));
-    }
     SetTextColor(dc, color);
     TextOutW(dc, x, y, text.c_str(), static_cast<int>(text.size()));
 }
@@ -856,7 +853,7 @@ void UpdateThemeColors(bool force) {
     // through and dark text can become unreadable. Force a high-contrast
     // light palette with a subtle drop shadow while the transparent theme
     // is active.
-    g_app.textShadow = g_app.transparentBackground;
+    g_app.textShadow = false;
     if (g_app.transparentBackground) {
         if (g_app.lightTheme) {
             g_app.textColor = RGB(20, 20, 20);
@@ -869,6 +866,21 @@ void UpdateThemeColors(bool force) {
             g_app.upColor = RGB(140, 255, 150);
             g_app.downColor = RGB(150, 195, 255);
         }
+    }
+
+    // Paint the actual background with a solid, readable palette. A layered
+    // child window cannot use per-pixel alpha together with color-key
+    // transparency, so transparency is expressed through the color key.
+    if (g_app.transparentBackground) {
+        // The window itself is see-through (color key) and the blur comes
+        // from the acrylic backdrop, so only text is painted here.
+        g_app.backgroundColor = kTransparentKey;
+        g_app.textColor = g_app.config.transparentThemeDark ? RGB(238, 238, 242)
+                                                           : RGB(248, 248, 250);
+        g_app.labelColor = g_app.config.transparentThemeDark ? RGB(200, 200, 214)
+                                                            : RGB(216, 216, 232);
+        g_app.upColor = RGB(126, 226, 132);
+        g_app.downColor = RGB(138, 192, 255);
     }
 }
 
@@ -1238,18 +1250,9 @@ void PaintTaskbar(HWND hwnd) {
     HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
     HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
     HBRUSH background = CreateSolidBrush(
-        g_app.transparentBackground ? RGB(0, 0, 0) : g_app.backgroundColor);
+        g_app.transparentBackground ? kTransparentKey : g_app.backgroundColor);
     FillRect(memory, &client, background);
     DeleteObject(background);
-
-    // Alpha-blended (transparent) theme: clear to fully transparent black so
-    // only the drawn text and icons remain visible over the taskbar.
-    if (g_app.transparentBackground) {
-        RECT full{0, 0, width, height};
-        HBRUSH clearBrush = CreateSolidBrush(RGB(0, 0, 0));
-        FillRect(memory, &full, clearBrush);
-        DeleteObject(clearBrush);
-    }
 
     SetBkMode(memory, TRANSPARENT);
     g_app.currentMemoryDc = memory;
@@ -1270,14 +1273,6 @@ void PaintTaskbar(HWND hwnd) {
             }
             const int textX = arrow ? kPadding + kArrowWidth : kPadding;
             RECT lineRect{textX, y, width - kPadding, y + lineHeight};
-            if (g_app.textShadow && memory == g_app.currentMemoryDc) {
-                RECT shadowRect = lineRect;
-                shadowRect.left += 1;
-                shadowRect.top += 1;
-                SetTextColor(memory, RGB(0, 0, 0));
-                DrawTextW(memory, text.c_str(), -1, &shadowRect,
-                          DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
-            }
             SetTextColor(memory, color);
             DrawTextW(memory, text.c_str(), -1, &lineRect,
                       DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
@@ -1399,6 +1394,72 @@ void PaintTaskbar(HWND hwnd) {
     EndPaint(hwnd, &paint);
 }
 
+bool g_acrylicApplied = false;
+
+// Enables a blurred acrylic backdrop behind the widget. Text then sits on a
+// soft frosted strip that stays readable instead of sinking into the wallpaper.
+void ApplyAcrylicBackdrop(HWND hwnd) {
+    struct AccentPolicy {
+        int state;
+        int flags;
+        int gradientColor;
+        int animationId;
+    };
+    struct WindowCompositionAttributeData {
+        int attribute;
+        void* data;
+        size_t sizeOfData;
+    };
+    using SetWindowCompositionAttributeProc = BOOL(WINAPI*)(HWND, WindowCompositionAttributeData*);
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32 == nullptr) {
+        return;
+    }
+    auto setAttribute = reinterpret_cast<SetWindowCompositionAttributeProc>(
+        GetProcAddress(user32, "SetWindowCompositionAttribute"));
+    if (setAttribute == nullptr) {
+        return;
+    }
+    // ACCENT_ENABLE_ACRYLICBLURBEHIND, gradient color in AABBGGRR.
+    const int tint = g_app.config.transparentThemeDark ? 0xCC181818 : 0xB43A3560;
+    AccentPolicy policy{4, 2, tint, 0};
+    WindowCompositionAttributeData data{19, &policy, sizeof(policy)};
+    if (setAttribute(hwnd, &data)) {
+        g_acrylicApplied = true;
+    }
+}
+
+void DisableAcrylicBackdrop(HWND hwnd) {
+    if (!g_acrylicApplied) {
+        return;
+    }
+    struct AccentPolicy {
+        int state;
+        int flags;
+        int gradientColor;
+        int animationId;
+    };
+    struct WindowCompositionAttributeData {
+        int attribute;
+        void* data;
+        size_t sizeOfData;
+    };
+    using SetWindowCompositionAttributeProc = BOOL(WINAPI*)(HWND, WindowCompositionAttributeData*);
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32 == nullptr) {
+        return;
+    }
+    auto setAttribute = reinterpret_cast<SetWindowCompositionAttributeProc>(
+        GetProcAddress(user32, "SetWindowCompositionAttribute"));
+    if (setAttribute == nullptr) {
+        return;
+    }
+    AccentPolicy policy{0, 0, 0, 0};
+    WindowCompositionAttributeData data{19, &policy, sizeof(policy)};
+    setAttribute(hwnd, &data);
+    g_acrylicApplied = false;
+}
+
 // Applies or removes layered alpha blending for the transparent theme.
 // Called before painting so the first frame is already alpha-blended.
 void ApplyLayeredTransparency() {
@@ -1413,8 +1474,10 @@ void ApplyLayeredTransparency() {
         if (!layered) {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
         }
-        SetLayeredWindowAttributes(hwnd, 0, static_cast<BYTE>(g_app.transparentAlpha), LWA_ALPHA);
+        SetLayeredWindowAttributes(hwnd, kTransparentKey, 0, LWA_COLORKEY);
+        ApplyAcrylicBackdrop(hwnd);
     } else if (layered) {
+        DisableAcrylicBackdrop(hwnd);
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
     }
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
@@ -1472,6 +1535,12 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 g_app.lastHistorySaveTick = now;
             }
             RefreshTaskbarWindow(false);
+        }
+        return 0;
+
+    case WM_SHOWWINDOW:
+        if (wParam != 0) {
+            InvalidateRect(hwnd, nullptr, FALSE);
         }
         return 0;
 

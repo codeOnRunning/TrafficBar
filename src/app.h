@@ -16,7 +16,8 @@ struct AppConfig {
     int intervalMs = 1000;
     int fontSize = 9;
     int themeMode = 0;  // 0 auto, 1 dark, 2 light, 3 navy, 4 forest, 5-10 colors, 11 transparent
-    int transparentAlpha = 40;  // 0 = see-through, 255 = opaque (transparent theme only)
+    int transparentAlpha = 40;  // legacy; transparent theme now uses a color key
+    bool transparentThemeDark = false;  // true = dark readable strip, false = lighter tint
 
 
     bool customEnabled = false;

@@ -103,10 +103,8 @@ void LoadConfig() {
                    1000, 60000);
     g_app.config.customShowPercent =
         GetPrivateProfileIntW(L"custom", L"show_percent", 0, path) != 0;
-    g_app.config.transparentAlpha =
-        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"transparent_alpha", 40,
-                                                          path)),
-                   0, 255);
+    g_app.config.transparentThemeDark =
+        GetPrivateProfileIntW(L"general", L"transparent_dark", 0, path) != 0;
     g_app.config.hideStockOffHours =
         GetPrivateProfileIntW(L"custom", L"hide_off_hours", 1, path) != 0;
 
@@ -158,9 +156,7 @@ void SaveConfig() {
     swprintf_s(theme, L"%d", g_app.config.themeMode);
     append(general, L"theme_mode", theme);
 
-    wchar_t alpha[32]{};
-    swprintf_s(alpha, L"%d", g_app.config.transparentAlpha);
-    append(general, L"transparent_alpha", alpha);
+    append(general, L"transparent_dark", g_app.config.transparentThemeDark ? L"1" : L"0");
 
     wchar_t luid[32]{};
     swprintf_s(luid, L"%016llX", static_cast<unsigned long long>(g_app.config.adapterLuid));
