@@ -371,7 +371,7 @@ void PositionHoverTip() {
 
     MONITORINFO monitorInfo{};
     monitorInfo.cbSize = sizeof(monitorInfo);
-    HMONITOR monitor = MonitorFromWindow(g_app.taskbarHwnd, MONITOR_DEFAULTTONEAREST);
+    HMONITOR monitor = MonitorFromWindow(hoverTaskbar, MONITOR_DEFAULTTONEAREST);
     if (monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo)) {
         if (vertical) {
             if (x + g_hoverWidth > monitorInfo.rcWork.right) {
@@ -965,6 +965,14 @@ RECT TaskbarTrayRect(HWND taskbar, const RECT& taskbarRect) {
         return trayRect;
     }
 
+    // Secondary taskbars have no TrayNotifyWnd; anchor to the clock module so
+    // the widget sits immediately left of the time, like the primary taskbar.
+    HWND clock = FindWindowExW(taskbar, nullptr, L"ClockButton", nullptr);
+    if (clock != nullptr) {
+        GetWindowRect(clock, &trayRect);
+        return trayRect;
+    }
+
     // Windows 11 can expose a slightly different tray layout. Keep a
     // conservative fallback on the taskbar itself instead of a desktop point.
     if ((taskbarRect.bottom - taskbarRect.top) > (taskbarRect.right - taskbarRect.left)) {
@@ -1215,9 +1223,9 @@ void RefreshSecondaryTaskbars(bool force) {
                                          return surface.taskbar == taskbar;
                                      });
         if (existing == g_secondaryTaskbars.end()) {
-            HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
-                                          kSecondaryTaskbarClass, L"", WS_POPUP, 0, 0, 10, 10,
-                                          nullptr, nullptr, g_app.instance, nullptr);
+            HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                                          kSecondaryTaskbarClass, L"", WS_CHILD, 0, 0, 10, 10,
+                                          taskbar, nullptr, g_app.instance, nullptr);
             if (window == nullptr) {
                 continue;
             }
@@ -1235,6 +1243,13 @@ void RefreshSecondaryTaskbars(bool force) {
             continue;
         }
 
+        // The secondary taskbar has no ReBar; embed as its child so the taskbar
+        // cannot cover the widget. Convert screen coordinates to parent-relative.
+        RECT taskbarRect{};
+        GetWindowRect(taskbar, &taskbarRect);
+        const int childX = x - taskbarRect.left;
+        const int childY = y - taskbarRect.top;
+
         RECT current{};
         GetWindowRect(existing->window, &current);
         const bool changed = force || current.left != x || current.top != y ||
@@ -1242,7 +1257,7 @@ void RefreshSecondaryTaskbars(bool force) {
                              existing->vertical != vertical;
         existing->vertical = vertical;
         if (changed) {
-            SetWindowPos(existing->window, HWND_TOPMOST, x, y, width, height,
+            SetWindowPos(existing->window, HWND_TOP, childX, childY, width, height,
                          SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
         InvalidateRect(existing->window, nullptr, FALSE);
