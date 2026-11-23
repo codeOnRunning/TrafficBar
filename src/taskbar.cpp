@@ -516,7 +516,7 @@ bool CreateHoverTipWindow() {
         WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, g_app.instance, nullptr);
     if (g_hoverTip != nullptr) {
         // Semi-transparent tooltip; still receives wheel and drag input.
-        SetLayeredWindowAttributes(g_hoverTip, 0, 115, LWA_ALPHA);
+        ApplyHoverTipOpacity(g_app.config.hoverOpacityPercent);
     }
     return g_hoverTip != nullptr;
 }
@@ -1534,7 +1534,7 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     switch (message) {
     case WM_HOTKEY:
         if (wParam == kHotkeySettings) {
-            ShowCustomSettings(hwnd);
+            ShowAppSettings(hwnd);
             return 0;
         }
         return 0;
@@ -1548,6 +1548,10 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_SHOW_SETTINGS:
         ShowCustomSettings(hwnd);
+        return 0;
+
+    case WM_SHOW_APP_SETTINGS:
+        ShowAppSettings(hwnd);
         return 0;
 
     case WM_TIMER:
@@ -1740,6 +1744,36 @@ LRESULT CALLBACK TaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
 }  // namespace
 
+void ApplyHoverTipOpacity(int percent) {
+    percent = std::clamp(percent, 0, 100);
+    if (g_hoverTip == nullptr) {
+        return;
+    }
+    const BYTE alpha = static_cast<BYTE>((percent * 255 + 50) / 100);
+    SetLayeredWindowAttributes(g_hoverTip, 0, alpha, LWA_ALPHA);
+}
+
+bool RegisterAppHotkey() {
+    if (g_app.taskbarHwnd == nullptr) {
+        return false;
+    }
+    UnregisterHotKey(g_app.taskbarHwnd, kHotkeySettings);
+    if (g_app.config.settingsHotkey.empty()) {
+        return true;
+    }
+    UINT modifiers = 0;
+    UINT vk = 0;
+    if (!ParseHotkeyText(g_app.config.settingsHotkey, modifiers, vk)) {
+        AppendAppLog(L"invalid settings hotkey: " + g_app.config.settingsHotkey);
+        return false;
+    }
+    if (!RegisterHotKey(g_app.taskbarHwnd, kHotkeySettings, modifiers | MOD_NOREPEAT, vk)) {
+        AppendAppLog(L"settings hotkey registration failed: " + g_app.config.settingsHotkey);
+        return false;
+    }
+    return true;
+}
+
 bool CreateTaskbarWindow(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
@@ -1799,11 +1833,7 @@ bool CreateTaskbarWindow(HINSTANCE instance) {
         g_app.plugins.Load();
     }
 
-    if (!RegisterHotKey(g_app.taskbarHwnd, kHotkeySettings, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT,
-                        'S')) {
-        RegisterHotKey(g_app.taskbarHwnd, kHotkeySettings, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT,
-                       'M');
-    }
+    RegisterAppHotkey();
 
 
     RefreshTaskbarWindow(true);
@@ -1821,6 +1851,7 @@ void DestroyTaskbarWindow() {
         UnregisterHotKey(g_app.taskbarHwnd, kHotkeySettings);
     }
     DestroyCustomSettings();
+    DestroyAppSettings();
     DestroyHoverTip();
     DestroySecondaryTaskbars();
     if (g_app.taskbarHwnd != nullptr) {

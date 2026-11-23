@@ -4,6 +4,8 @@
 
 完整使用说明：[docs/使用说明.md](docs/使用说明.md)
 
+版本变更说明：[CHANGELOG.md](CHANGELOG.md)
+
 ![任务栏效果](docs/taskbar.png)
 
 显示：
@@ -44,6 +46,7 @@ build.bat
 - 外观主题：深色 / 浅色 / 深蓝 / 墨绿 / 黄色 / 粉色 / 紫色 / 橙色 / 青色 / 酒红 / 透明（极淡底色 + 高对比文字，点击与双击正常）
 - 网卡：自动选择或手动指定
 - 刷新间隔：0.5 / 1 / 2 / 5 秒
+- 设置...：调整浮窗透明度、修改打开设置的快捷键
 - 开机自启（任务计划，最高权限运行）
 - 流量统计...：打开流量统计窗口
 - 进程流量...：打开按进程统计窗口
@@ -53,7 +56,7 @@ build.bat
 
 - 鼠标移到任务栏监控上：浮窗立即弹出
 - 双击任务栏监控：打开任务管理器
-- `Ctrl+Alt+S`：打开“自定义指标”设置窗
+- `Ctrl+Alt+S`：打开“设置”窗口（可调浮窗透明度、修改快捷键）
 
 双击任务栏文字打开任务管理器。
 
@@ -81,6 +84,8 @@ show_disk=0
 show_gpu=0
 theme_mode=0
 transparent_dark=0
+hover_opacity=45
+hotkey=Ctrl+Alt+S
 interval_ms=1000
 font_size=9
 adapter_luid=0000000000000000
@@ -136,7 +141,7 @@ TrafficBarPluginGetMetrics(TrafficBarPluginMetric* metrics, int capacity);
 
 ## 自定义指标（可选）
 
-任务栏第二行可以显示一个主指标，鼠标悬停显示全部项目。默认关闭，使用 `Ctrl+Alt+S` 打开设置；设置窗不会出现在右键菜单和托盘提示里。
+任务栏第二行可以显示一个主指标，鼠标悬停显示全部项目。默认关闭，使用右键菜单「设置...」或 `Ctrl+Alt+S` 打开设置；在设置里点「自定义指标...」编辑。
 
 ![自定义指标设置](docs/custom-settings.png)
 

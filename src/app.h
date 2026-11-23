@@ -18,6 +18,8 @@ struct AppConfig {
     int themeMode = 0;  // 0 auto, 1 dark, 2 light, 3 navy, 4 forest, 5-10 colors, 11 transparent
     int transparentAlpha = 40;  // legacy; transparent theme now uses a color key
     bool transparentThemeDark = false;  // true = dark readable strip, false = lighter tint
+    int hoverOpacityPercent = 45;  // hover tip opacity, 0-100
+    std::wstring settingsHotkey = L"Ctrl+Alt+S";  // opens settings; empty disables
 
 
     bool customEnabled = false;
@@ -108,3 +110,10 @@ void DestroyProcessTrafficWindow();
 
 void ShowCustomSettings(HWND owner);
 void DestroyCustomSettings();
+
+void ShowAppSettings(HWND owner);
+void DestroyAppSettings();
+void ApplyHoverTipOpacity(int percent);
+bool RegisterAppHotkey();
+std::wstring FormatHotkeyText(UINT modifiers, UINT vk);
+bool ParseHotkeyText(const std::wstring& text, UINT& modifiers, UINT& vk);

@@ -50,6 +50,7 @@ enum MenuCommand : UINT {
     IDM_ABOUT = 5001,
     IDM_HISTORY = 5002,
     IDM_PROCESS_TRAFFIC = 5003,
+    IDM_SETTINGS = 5004,
     IDM_EXIT = 6001,
 };
 
@@ -80,7 +81,7 @@ void UpdateSampleTimer() {
 }
 
 void ShowAbout(HWND owner) {
-    std::wstring message = L"TrafficBar 0.21.5\n\n";
+    std::wstring message = L"TrafficBar 0.22.0\n\n";
     message += L"任务栏网速 / CPU / 内存监控 + 历史流量统计\n\n";
     message += L"配置文件：\n";
     message += g_app.configPath;
@@ -165,6 +166,9 @@ void HandleMenuCommand(HWND owner, UINT command, const std::vector<AdapterInfo>&
         } else {
             SetAutoStart(true);
         }
+    } else if (command == IDM_SETTINGS) {
+        ShowAppSettings(owner);
+        needsRefresh = false;
     } else if (command == IDM_ABOUT) {
         ShowAbout(owner);
         needsRefresh = false;
@@ -372,6 +376,8 @@ void ShowAppMenu(HWND owner, POINT pt) {
         AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(intervalMenu), L"刷新间隔");
     }
 
+    AppendMenuW(menu, MF_STRING, IDM_SETTINGS, L"设置...");
+
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | (IsAutoStartEnabled() ? MF_CHECKED : MF_UNCHECKED), IDM_AUTOSTART,
                 L"开机自启（任务计划）");
@@ -406,6 +412,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR commandLine, int) {
         commandLine != nullptr && wcsstr(commandLine, L"--custom-settings") != nullptr;
     const bool processRequested =
         commandLine != nullptr && wcsstr(commandLine, L"--process-traffic") != nullptr;
+    const bool appSettingsRequested =
+        commandLine != nullptr && wcsstr(commandLine, L"--settings") != nullptr;
     g_app.safeMode = commandLine != nullptr && wcsstr(commandLine, L"--safe-mode") != nullptr;
 
     HANDLE mutex = CreateMutexW(nullptr, TRUE, kMutexName);
@@ -421,6 +429,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR commandLine, int) {
                     message = WM_SHOW_SETTINGS;
                 } else if (processRequested) {
                     message = WM_SHOWPROCESS;
+                } else if (appSettingsRequested) {
+                    message = WM_SHOW_APP_SETTINGS;
                 }
                 PostMessageW(existing, message, 0, 0);
             } else {
@@ -451,7 +461,9 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR commandLine, int) {
     AppendAppLog(L"TrafficBar started");
     AddTrayIcon();
 
-    if (settingsRequested) {
+    if (appSettingsRequested) {
+        ShowAppSettings(g_app.taskbarHwnd);
+    } else if (settingsRequested) {
         ShowCustomSettings(g_app.taskbarHwnd);
     } else if (historyRequested) {
         ShowHistoryWindow(g_app.taskbarHwnd);

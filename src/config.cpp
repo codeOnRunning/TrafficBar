@@ -105,6 +105,21 @@ void LoadConfig() {
         GetPrivateProfileIntW(L"custom", L"show_percent", 0, path) != 0;
     g_app.config.transparentThemeDark =
         GetPrivateProfileIntW(L"general", L"transparent_dark", 0, path) != 0;
+    g_app.config.hoverOpacityPercent =
+        std::clamp(static_cast<int>(GetPrivateProfileIntW(L"general", L"hover_opacity", 45, path)), 0,
+                   100);
+
+    wchar_t hotkeyBuffer[128]{};
+    GetPrivateProfileStringW(L"general", L"hotkey", L"Ctrl+Alt+S", hotkeyBuffer,
+                             static_cast<DWORD>(_countof(hotkeyBuffer)), path);
+    g_app.config.settingsHotkey = TrimText(hotkeyBuffer);
+    if (!g_app.config.settingsHotkey.empty()) {
+        UINT hotkeyModifiers = 0;
+        UINT hotkeyVk = 0;
+        if (!ParseHotkeyText(g_app.config.settingsHotkey, hotkeyModifiers, hotkeyVk)) {
+            g_app.config.settingsHotkey = L"Ctrl+Alt+S";
+        }
+    }
     g_app.config.hideStockOffHours =
         GetPrivateProfileIntW(L"custom", L"hide_off_hours", 1, path) != 0;
 
@@ -157,6 +172,11 @@ void SaveConfig() {
     append(general, L"theme_mode", theme);
 
     append(general, L"transparent_dark", g_app.config.transparentThemeDark ? L"1" : L"0");
+
+    wchar_t hoverOpacity[32]{};
+    swprintf_s(hoverOpacity, L"%d", g_app.config.hoverOpacityPercent);
+    append(general, L"hover_opacity", hoverOpacity);
+    append(general, L"hotkey", g_app.config.settingsHotkey);
 
     wchar_t luid[32]{};
     swprintf_s(luid, L"%016llX", static_cast<unsigned long long>(g_app.config.adapterLuid));
@@ -587,4 +607,133 @@ void AppendAppLog(const std::wstring& text) {
         WriteFile(file, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
     }
     CloseHandle(file);
+}
+
+namespace {
+
+struct HotkeyKeyName {
+    UINT vk;
+    const wchar_t* name;
+};
+
+constexpr HotkeyKeyName kHotkeyKeyNames[] = {
+    {VK_SPACE, L"Space"},     {VK_TAB, L"Tab"},       {VK_RETURN, L"Enter"},
+    {VK_BACK, L"Backspace"},  {VK_DELETE, L"Delete"}, {VK_INSERT, L"Insert"},
+    {VK_HOME, L"Home"},       {VK_END, L"End"},       {VK_PRIOR, L"PageUp"},
+    {VK_NEXT, L"PageDown"},   {VK_LEFT, L"Left"},     {VK_RIGHT, L"Right"},
+    {VK_UP, L"Up"},           {VK_DOWN, L"Down"},
+};
+
+bool ParseHotkeyKey(const std::wstring& token, UINT& vk) {
+    if (token.size() == 1) {
+        wchar_t ch = token[0];
+        if (ch >= L'a' && ch <= L'z') {
+            ch = static_cast<wchar_t>(ch - L'a' + L'A');
+        }
+        if ((ch >= L'A' && ch <= L'Z') || (ch >= L'0' && ch <= L'9')) {
+            vk = static_cast<UINT>(ch);
+            return true;
+        }
+    }
+    if (token.size() >= 2 && (token[0] == L'F' || token[0] == L'f')) {
+        wchar_t* end = nullptr;
+        const long number = wcstol(token.c_str() + 1, &end, 10);
+        if (end != nullptr && *end == L'\0' && number >= 1 && number <= 24) {
+            vk = static_cast<UINT>(VK_F1 + number - 1);
+            return true;
+        }
+    }
+    for (const auto& entry : kHotkeyKeyNames) {
+        if (EqualsIgnoreCase(token, entry.name)) {
+            vk = entry.vk;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::wstring HotkeyKeyText(UINT vk) {
+    if ((vk >= L'A' && vk <= L'Z') || (vk >= L'0' && vk <= L'9')) {
+        return std::wstring(1, static_cast<wchar_t>(vk));
+    }
+    if (vk >= VK_F1 && vk <= VK_F24) {
+        wchar_t buffer[8]{};
+        swprintf_s(buffer, L"F%u", vk - VK_F1 + 1);
+        return buffer;
+    }
+    for (const auto& entry : kHotkeyKeyNames) {
+        if (entry.vk == vk) {
+            return entry.name;
+        }
+    }
+    return L"";
+}
+
+}  // namespace
+
+std::wstring FormatHotkeyText(UINT modifiers, UINT vk) {
+    std::wstring text;
+    auto append = [&text](const wchar_t* part) {
+        if (!text.empty()) {
+            text.push_back(L'+');
+        }
+        text += part;
+    };
+    if ((modifiers & MOD_CONTROL) != 0) {
+        append(L"Ctrl");
+    }
+    if ((modifiers & MOD_ALT) != 0) {
+        append(L"Alt");
+    }
+    if ((modifiers & MOD_SHIFT) != 0) {
+        append(L"Shift");
+    }
+    if ((modifiers & MOD_WIN) != 0) {
+        append(L"Win");
+    }
+    const std::wstring key = HotkeyKeyText(vk);
+    if (!key.empty()) {
+        append(key.c_str());
+    }
+    return text;
+}
+
+bool ParseHotkeyText(const std::wstring& text, UINT& modifiers, UINT& vk) {
+    modifiers = 0;
+    vk = 0;
+    if (text.empty()) {
+        return false;
+    }
+
+    bool haveKey = false;
+    size_t start = 0;
+    while (start <= text.size()) {
+        const size_t separator = text.find(L'+', start);
+        const std::wstring token =
+            TrimText(text.substr(start, separator == std::wstring::npos ? std::wstring::npos
+                                                                      : separator - start));
+        if (!token.empty()) {
+            if (EqualsIgnoreCase(token, L"ctrl") || EqualsIgnoreCase(token, L"control")) {
+                modifiers |= MOD_CONTROL;
+            } else if (EqualsIgnoreCase(token, L"alt")) {
+                modifiers |= MOD_ALT;
+            } else if (EqualsIgnoreCase(token, L"shift")) {
+                modifiers |= MOD_SHIFT;
+            } else if (EqualsIgnoreCase(token, L"win") || EqualsIgnoreCase(token, L"windows")) {
+                modifiers |= MOD_WIN;
+            } else {
+                UINT parsed = 0;
+                if (!ParseHotkeyKey(token, parsed) || haveKey) {
+                    return false;
+                }
+                vk = parsed;
+                haveKey = true;
+            }
+        }
+        if (separator == std::wstring::npos) {
+            break;
+        }
+        start = separator + 1;
+    }
+    return haveKey && modifiers != 0;
 }

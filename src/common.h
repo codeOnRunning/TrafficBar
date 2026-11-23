@@ -56,6 +56,7 @@ constexpr UINT WM_SHOWHISTORY = WM_APP + 3;
 constexpr UINT WM_SHOWPROCESS = WM_APP + 6;
 constexpr UINT WM_QUOTE_UPDATED = WM_APP + 4;
 constexpr UINT WM_SHOW_SETTINGS = WM_APP + 5;
+constexpr UINT WM_SHOW_APP_SETTINGS = WM_APP + 7;
 constexpr int kHotkeySettings = 0xB001;
 constexpr UINT_PTR TIMER_SAMPLE = 1;
 
