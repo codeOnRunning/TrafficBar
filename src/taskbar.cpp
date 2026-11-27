@@ -15,6 +15,7 @@ constexpr const wchar_t* kHoverTipClass = L"TrafficBar.HoverTip";
 constexpr const wchar_t* kSecondaryTaskbarClass = L"TrafficBar.SecondaryTaskbar";
 constexpr UINT_PTR kTimerHoverShow = 3;
 constexpr UINT_PTR kTimerThemeRefresh = 4;
+constexpr UINT_PTR kTimerSecondaryZOrder = 5;
 constexpr int kHoverVisibleStocks = 3;
 // Color key used by the transparent theme. This exact color is painted as the
 // widget background and becomes see-through via LWA_COLORKEY.
@@ -1133,6 +1134,12 @@ LRESULT CALLBACK SecondaryTaskbarWndProc(HWND hwnd, UINT message, WPARAM wParam,
         }
         return 0;
     case WM_TIMER:
+        if (wParam == kTimerSecondaryZOrder) {
+            // Reassert topmost in case the taskbar raised a sibling above us.
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            return 0;
+        }
         if (wParam == kTimerHoverShow) {
             KillTimer(hwnd, kTimerHoverShow);
             if (SecondaryTaskbarSurface* surface = findSurface()) {
@@ -1223,14 +1230,19 @@ void RefreshSecondaryTaskbars(bool force) {
                                          return surface.taskbar == taskbar;
                                      });
         if (existing == g_secondaryTaskbars.end()) {
-            HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                                          kSecondaryTaskbarClass, L"", WS_CHILD, 0, 0, 10, 10,
+            // Secondary taskbars have no ReBar. Use a topmost popup and keep it
+            // above the taskbar with a short z-order guard: the taskbar raises
+            // its task-list child when buttons appear or disappear, which would
+            // otherwise briefly cover an embedded child window.
+            HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+                                          kSecondaryTaskbarClass, L"", WS_POPUP, 0, 0, 10, 10,
                                           taskbar, nullptr, g_app.instance, nullptr);
             if (window == nullptr) {
                 continue;
             }
             g_secondaryTaskbars.push_back({window, taskbar, false});
             existing = std::prev(g_secondaryTaskbars.end());
+            SetTimer(window, kTimerSecondaryZOrder, 50, nullptr);
         }
 
         int x = 0;
@@ -1243,13 +1255,6 @@ void RefreshSecondaryTaskbars(bool force) {
             continue;
         }
 
-        // The secondary taskbar has no ReBar; embed as its child so the taskbar
-        // cannot cover the widget. Convert screen coordinates to parent-relative.
-        RECT taskbarRect{};
-        GetWindowRect(taskbar, &taskbarRect);
-        const int childX = x - taskbarRect.left;
-        const int childY = y - taskbarRect.top;
-
         RECT current{};
         GetWindowRect(existing->window, &current);
         const bool changed = force || current.left != x || current.top != y ||
@@ -1257,7 +1262,7 @@ void RefreshSecondaryTaskbars(bool force) {
                              existing->vertical != vertical;
         existing->vertical = vertical;
         if (changed) {
-            SetWindowPos(existing->window, HWND_TOP, childX, childY, width, height,
+            SetWindowPos(existing->window, HWND_TOPMOST, x, y, width, height,
                          SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
         InvalidateRect(existing->window, nullptr, FALSE);
